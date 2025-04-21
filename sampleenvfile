@@ -1,0 +1,6 @@
+DEBUG=True
+SECRET_KEY=django-insecure-djxvvo2=)oohi854ck6sl$sf1l*+n!@z)a-8k0yxnct4wu#mp7
+AWS_ACCESS_KEY_ID=your_aws_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret
+AWS_STORAGE_BUCKET_NAME=your_bucket_name
+AWS_REGION=your_aws_region
