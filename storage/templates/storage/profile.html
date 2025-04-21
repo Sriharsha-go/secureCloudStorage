@@ -1,0 +1,17 @@
+{% extends 'storage/base.html' %}
+{% block content %}
+<h2>User Profile</h2>
+<p>MFA Status: {{ mfa_status }}</p>
+{% if user.is_mfa_enabled %}
+  <p>MFA is enabled.</p>
+{% else %}
+  <a href="{% url 'mfa_setup' %}">Set up MFA</a>
+{% endif %}
+<form method="post">
+  {% csrf_token %}
+  
+  <a href="{% url 'reset_mfa_device' %}"><button class="btn btn-danger">Reset MFA</button></a>
+  <p>Are you sure you want to reset your MFA device?</p>
+</form>
+<a href="{% url 'disable_mfa' %}" class="btn btn-danger">Disable MFA</a>
+{% endblock %}

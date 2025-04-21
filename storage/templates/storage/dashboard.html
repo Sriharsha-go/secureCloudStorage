@@ -1,0 +1,37 @@
+{% extends 'storage/base.html' %}
+{% block content %}
+<h2>Welcome, {{ user.username }}!</h2>
+
+<div class="d-flex justify-content-between mb-3">
+  <a href="{% url 'upload_file' %}" class="btn btn-primary">Upload New File</a>
+  <a href="{% url 'logout' %}" class="btn btn-danger">Logout</a>
+</div>
+
+<h3>Your Files</h3>
+
+{% if files %}
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>File Name</th>
+        <th>Uploaded At</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for file in files %}
+        <tr>
+          <td>{{ file.file_name }}</td>
+          <td>{{ file.uploaded_at|date:"Y-m-d H:i" }}</td>
+          <td>
+            <a href="{% url 'verify_action_otp' file.id 'download' %}" class="btn btn-sm btn-success">Download</a>
+            <a href="{% url 'verify_action_otp' file.id 'delete' %}" class="btn btn-sm btn-danger">Delete</a>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <div class="alert alert-info">You haven't uploaded any files yet.</div>
+{% endif %}
+{% endblock %}
