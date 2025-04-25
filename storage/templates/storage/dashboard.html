@@ -8,6 +8,11 @@
 </div>
 
 <h3>Your Files</h3>
+<form method="get" class="mb-3 d-flex" style="gap: 10px;">
+  <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Search files by name...">
+  <button type="submit" class="btn btn-outline-primary">Search</button>
+</form>
+
 
 {% if files %}
   <table class="table table-striped">
@@ -26,6 +31,9 @@
           <td>
             <a href="{% url 'verify_action_otp' file.id 'download' %}" class="btn btn-sm btn-success">Download</a>
             <a href="{% url 'verify_action_otp' file.id 'delete' %}" class="btn btn-sm btn-danger">Delete</a>
+            <a href="{% url 'verify_action_otp' file.id 'share' %}" class="btn btn-sm btn-success">Share</a>
+            <a href="{% url 'verify_action_otp' file.id 'delete' %}" class="btn btn-sm btn-danger">Move to Trash</a>
+
           </td>
         </tr>
       {% endfor %}
