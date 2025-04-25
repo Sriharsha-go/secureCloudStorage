@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
-from .models import File, Folder
+from .models import File, FilePermission
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -41,6 +41,13 @@ class FileUploadForm(forms.ModelForm):
     file_obj = forms.FileField(label="Select file")
     class Meta:
         model = File
-        fields = ['file_name', 'folder', 'file_obj', 'is_public', 'shared_with']
+        fields = ['file_name', 'folder', 'file_obj', 'is_public']
 
 
+class ShareFileForm(forms.Form):
+    """
+    A form for sharing files with other users. It includes
+    fields for selecting users and the type of permission.
+    """
+    users = forms.ModelMultipleChoiceField(queryset=User.objects.all(), widget=forms.CheckboxSelectMultiple)
+    permission = forms.ChoiceField(choices=FilePermission.PERMISSION_CHOICES)
