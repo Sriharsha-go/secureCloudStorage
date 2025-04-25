@@ -10,18 +10,27 @@ from django_otp import login as otp_login
 from rest_framework_simplejwt.tokens import RefreshToken
 from botocore.client import Config
 from django.http import HttpResponse
+from django.utils import timezone
+from django.utils.timezone import now 
 
 
 import boto3
 import uuid
 import io
+import os
+from io import BytesIO
 import qrcode
 import qrcode.image.pil
 from base64 import b64encode
+import logging
+import mimetypes
+from django.http import FileResponse
 
-from .forms import LoginForm, FileUploadForm, RegisterForm
-from .models import File, Folder
-from .utils import log_file_action
+logger = logging.getLogger(__name__)
+
+from .forms import LoginForm, FileUploadForm, RegisterForm, ShareFileForm
+from .models import File, FilePermission
+from .utils import log_file_action, decrypt_file_bytes, encrypt_file_bytes
 
 # ---------- MFA SETUP ----------
 @login_required
@@ -113,6 +122,7 @@ def register(request):
         form = RegisterForm(request.POST)
         if form.is_valid():
             user = form.save()
+            user.generate_encryption_key()  # 🔐 Generate E2EE key
             auth_login(request, user)
             refresh = RefreshToken.for_user(user)
             request.session['access_token'] = str(refresh.access_token)
@@ -121,6 +131,7 @@ def register(request):
     else:
         form = RegisterForm()
     return render(request, 'storage/register.html', {'form': form})
+
 
 def user_login(request):
     """
@@ -173,18 +184,20 @@ def profile(request):
 @login_required
 def dashboard(request):
     """
-    A view to display the user's dashboard. It shows a
-    list of files that the user has uploaded, shared with
-    them, or that are public. The dashboard allows the user
-    to manage their files, upload new files, and access
-    their shared files. The dashboard is the main interface
-    for the user to interact with the file storage system.
+    Displays user files (uploaded, shared, or public) and supports file search by name.
     """
     user = request.user
+    query = request.GET.get('q', '')
+
     files = File.objects.filter(
-        Q(uploaded_by=user) | Q(shared_with=user) | Q(is_public=True)
+        Q(uploaded_by=user) | Q(shared_with=user) | Q(is_public=True),
+        deleted_at__isnull=True
     ).distinct()
-    return render(request, 'storage/dashboard.html', {'files': files})
+
+    if query:
+        files = files.filter(file_name__icontains=query)
+
+    return render(request, 'storage/dashboard.html', {'files': files, 'query': query})
 
 # ---------- FILE HANDLING ----------
 def upload_to_s3(file, s3_key):
@@ -195,32 +208,35 @@ def upload_to_s3(file, s3_key):
     the file in the S3 bucket. The function uses the
     boto3 library to interact with the S3 service.
     """
-    s3 = boto3.client('s3')
+    s3 = boto3.client(
+        's3',
+        region_name=settings.AWS_REGION,
+        config=Config(signature_version='s3v4')
+        )
     s3.upload_fileobj(file, settings.AWS_STORAGE_BUCKET_NAME, s3_key)
     return s3_key
 
+
+
 @login_required
 def upload_file(request):
-    """
-    A view to handle file uploads. It uses the FileUploadForm
-    to validate the file and its metadata. If the form is
-    valid, it uploads the file to S3 and creates a File
-    instance in the database. The file is associated with
-    the user who uploaded it. The view also allows the user
-    to specify a folder for the file, share it with other
-    users, and set its visibility (public or private).
-    """
     if request.method == 'POST':
         form = FileUploadForm(request.POST, request.FILES)
         if form.is_valid():
             file_obj = request.FILES['file_obj']
             file_name = form.cleaned_data['file_name']
             folder = form.cleaned_data.get('folder')
-            shared_with = form.cleaned_data.get('shared_with')
             is_public = form.cleaned_data.get('is_public')
 
+            file_bytes = file_obj.read()
+            encrypted_bytes = encrypt_file_bytes(file_bytes, request.user.encryption_key)
+            print(f"Encrypted preview (upload): {encrypted_bytes[:60]}")
+            print(f"Original preview: {file_bytes[:60]}")
+
+            encrypted_file = BytesIO(encrypted_bytes)
+
             s3_key = f"{request.user.id}/{folder.name if folder else 'root'}/{uuid.uuid4()}_{file_obj.name}"
-            upload_to_s3(file_obj, s3_key)
+            upload_to_s3(encrypted_file, s3_key)
 
             file_instance = File.objects.create(
                 file_name=file_name,
@@ -228,14 +244,11 @@ def upload_file(request):
                 uploaded_by=request.user,
                 folder=folder,
                 is_public=is_public,
-            )
+                is_encrypted=True,
+            )           
 
-            if shared_with:
-                file_instance.shared_with.set(shared_with)
-            # ✅ Log upload action
             log_file_action(request.user, file_instance, 'UPLOAD', request)
-
-            messages.success(request, "File uploaded successfully.")
+            messages.success(request, "File uploaded securely with E2EE.")
             return redirect('upload_file')
     else:
         form = FileUploadForm()
@@ -252,7 +265,7 @@ def generate_presigned_url(s3_key, expiration=300):
     """
     s3 = boto3.client(
         's3',
-        region_name='us-east-1',
+        region_name=settings.AWS_REGION,
         config=Config(signature_version='s3v4')
     )
 
@@ -265,65 +278,168 @@ def generate_presigned_url(s3_key, expiration=300):
 @login_required
 def verify_action_otp(request, file_id, action):
     """
-    A view to verify the OTP for secure file actions (download/delete).
-    It checks the OTP entered by the user against the TOTPDevice
-    associated with the user. If the OTP is valid, it allows
-    the user to proceed with the action (download/delete). If
-    the OTP is invalid, it shows an error message. The view
-    also logs the action (successful or failed) for auditing
-    purposes.
+    Step 1: Ensure the user owns or was shared the file.
+    Step 2: Render OTP form; on POST verify, then redirect to secure_file_action.
     """
-    file = get_object_or_404(File, id=file_id, uploaded_by=request.user)
+    user = request.user
 
+    # 1️⃣ Allow owner or any shared user
+    try:
+        file = File.objects.get(
+            Q(id=file_id) &
+            (Q(uploaded_by=user) | Q(shared_with=user))
+        )
+    except File.DoesNotExist:
+        return HttpResponse("You do not have access to this file.", status=403)
+
+    # 2️⃣ On POST, check OTP
     if request.method == "POST":
         token = request.POST.get("token")
-        device = TOTPDevice.objects.filter(user=request.user, confirmed=True).first()
+        device = TOTPDevice.objects.filter(user=user, confirmed=True).first()
 
         if device and device.verify_token(token):
             request.session['verified_file_action'] = f"{file_id}:{action}"
             request.session.set_expiry(300)
             return redirect('secure_file_action', file_id=file.id, action=action)
         else:
-            log_file_action(request.user, file, f'{action.upper()}_FAILED_OTP', request)
-            messages.error(request, "Invalid OTP code")
+            log_file_action(user, file, f'{action.upper()}_FAILED_OTP', request)
+            messages.error(request, "Invalid OTP code.")
 
-    return render(request, 'storage/verify_action_otp.html', {'file': file, 'action': action})
+    return render(request, 'storage/verify_action_otp.html', {
+        'file': file,
+        'action': action,
+    })
+
 
 @login_required
 def secure_file_action(request, file_id, action):
     """
-    A view to handle secure file actions (download/delete).
-    It checks if the user has verified the action using
-    OTP. If the action is verified, it proceeds with the
-    action (download/delete). The view also logs the action
-    (successful or failed) for auditing purposes. The
-    download action generates a presigned URL for the file
-    in S3, allowing the user to download the file securely.
-    The delete action removes the file from S3 and deletes
-    the file instance from the database. The view also
-    handles the case where the user has not verified the
-    action, redirecting them to the OTP verification page.
+    Executes download/delete/restore/share only if:
+      • user is owner, OR
+      • user was shared and holds the matching permission.
     """
-    file = get_object_or_404(File, id=file_id, uploaded_by=request.user)
+    user = request.user
+
+    # 1️⃣ Fetch file if owner or shared
+    file = get_object_or_404(
+        File,
+        Q(id=file_id) &
+        (Q(uploaded_by=user) | Q(shared_with=user))
+    )
+
+    # 2️⃣ Check OTP step was done
     expected = f"{file_id}:{action}"
-
     if request.session.get('verified_file_action') != expected:
-        return redirect('verify_action_otp', file_id=file.id, action=action)
+        return redirect('verify_action_otp', file_id=file_id, action=action)
 
+    # 3️⃣ OWNER flag
+    is_owner = (file.uploaded_by == user)
+
+    # 4️⃣ PERMISSION CHECK for non-owners
+    if not is_owner:
+        try:
+            perm = FilePermission.objects.get(file=file, user=user)
+        except FilePermission.DoesNotExist:
+            return HttpResponse("You don't have permission to access this file.", status=403)
+
+        # map actions → required permission
+        if action == 'download' and perm.permission not in ['download', 'edit']:
+            return HttpResponse("You don't have download permission.", status=403)
+        if action == 'share' and perm.permission != 'edit':
+            return HttpResponse("Only owners can re-share files.", status=403)
+        if action in ['delete', 'restore'] and not is_owner:
+            return HttpResponse("Only owners can delete or restore files.", status=403)
+
+    # 5️⃣ EXECUTE ACTION
     if action == 'download':
-        url = generate_presigned_url(file.s3_key)
-        # ✅ Log download action
+        # download logic
+        s3 = boto3.client(
+            's3',
+            region_name=settings.AWS_REGION,
+            config=Config(signature_version='s3v4')
+        )
+        obj = s3.get_object(Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=file.s3_key)
+        encrypted_bytes = obj['Body'].read()
+
+        # 🔑 Use the owner's key, not request.user's key
+        owner_key = file.uploaded_by.encryption_key
+        if not owner_key:
+            return HttpResponse("Owner's encryption key is missing.", status=500)
+
+        try:
+            decrypted_bytes = decrypt_file_bytes(encrypted_bytes, owner_key)
+        except Exception as e:
+            return HttpResponse(f"Decryption failed: {e}", status=403)
+
+        # Serve the decrypted data
+        stream = BytesIO(decrypted_bytes)
+        filename = os.path.basename(file.s3_key).split('_', 1)[-1]
+        mime_type, _ = mimetypes.guess_type(filename)
+        response = FileResponse(stream, content_type=(mime_type or 'application/octet-stream'))
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         log_file_action(request.user, file, 'DOWNLOAD', request)
-        return redirect(url)
+        return response
 
     elif action == 'delete':
-        s3 = boto3.client('s3')
-        s3.delete_object(Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=file.s3_key)
-        # ✅ Log download action
-        log_file_action(request.user, file, 'DELETE', request)
+        # soft or permanent delete
+        if not file.is_deleted:
+            file.is_deleted = True
+            file.deleted_at = timezone.now()
+            file.save()
+            log_file_action(user, file, 'SOFT_DELETE', request)
+            messages.success(request, f"{file.file_name} moved to trash.")
+        else:
+            s3 = boto3.client(
+                's3',
+                region_name=settings.AWS_REGION,
+                config=Config(signature_version='s3v4')
+            )
+            s3.delete_object(Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=file.s3_key)
+            file.delete()
+            log_file_action(user, file, 'PERMANENT_DELETE', request)
+            messages.success(request, f"{file.file_name} permanently deleted.")
+        return redirect('profile')
 
-        file.delete()
-        messages.success(request, f"{file.file_name} deleted successfully.")
-        return redirect('dashboard')
+    elif action == 'restore':
+        if file.is_deleted:
+            file.is_deleted = False
+            file.deleted_at = None
+            file.save()
+            log_file_action(user, file, 'RESTORE', request)
+            messages.success(request, f"{file.file_name} restored.")
+        else:
+            messages.warning(request, "File is not in trash.")
+        return redirect('profile')
+
+    elif action == 'share':
+        # re-share form (owners only)
+        if request.method == 'POST':
+            form = ShareFileForm(request.POST)
+            if form.is_valid():
+                users = form.cleaned_data['users']
+                permission = form.cleaned_data['permission']
+                file.shared_with.set(users)
+                FilePermission.objects.filter(file=file).delete()
+                for u in users:
+                    FilePermission.objects.create(file=file, user=u, permission=permission)
+                log_file_action(user, file, 'SHARE', request)
+                del request.session['verified_file_action']
+                messages.success(request, "File shared successfully.")
+                return redirect('dashboard')
+        else:
+            shared = file.shared_with.all()
+            form = ShareFileForm(initial={'users': shared})
+
+        return render(request, 'storage/share_file.html', {'form': form, 'file': file})
 
     return HttpResponse("Invalid action.", status=400)
+
+@login_required
+def soft_delete_file(request, file_id):
+    file = get_object_or_404(File, id=file_id, uploaded_by=request.user, is_deleted=False)
+    file.is_deleted = True
+    file.deleted_at = timezone.now()
+    file.save()
+    log_file_action(request.user, file, 'SOFT_DELETE', request)
+    messages.success(request, f"{file.file_name} moved to trash.")
+    return redirect('profile')
