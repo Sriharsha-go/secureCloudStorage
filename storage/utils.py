@@ -1,4 +1,14 @@
 from .models import AuditLog
+from cryptography.fernet import Fernet
+
+def encrypt_file_bytes(file_bytes, key):
+    fernet = Fernet(key)
+    return fernet.encrypt(file_bytes)
+
+def decrypt_file_bytes(encrypted_bytes, key):
+    fernet = Fernet(key)
+    return fernet.decrypt(encrypted_bytes)
+
 
 def log_file_action(user, file, action, request=None):
     """	
