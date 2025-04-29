@@ -1,11 +1,46 @@
 {% extends 'storage/base.html' %}
-{% block content %}
-<h2>Create an Account</h2>
-<form method="post">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">Register</button>
-</form>
 
-<p>Already have an account? <a href="{% url 'login' %}">Login</a></p>
+{% block content %}
+<div class="d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="form-container" style="max-width: 500px; width: 100%;">
+        <h2 class="text-center mb-4" style="color:#F57C00;">Register</h2>
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label class="form-label">First Name</label>
+                <input type="text" name="first_name" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Last Name</label>
+                <input type="text" name="last_name" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Email</label>
+                <input type="email" name="email" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Username</label>
+                <input type="text" name="username" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Phone Number</label>
+                <input type="text" name="phone_number" class="form-control">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <input type="password" name="password1" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Confirm Password</label>
+                <input type="password" name="password2" class="form-control" required>
+            </div>
+            <div class="d-grid mb-3">
+                <button type="submit" class="btn btn-primary">Register</button>
+            </div>
+            <p class="text-center">
+                Already have an account? <a href="{% url 'login' %}" class="text-decoration-none" style="color:#F57C00;">Login</a>
+            </p>
+        </form>
+    </div>
+</div>
 {% endblock %}

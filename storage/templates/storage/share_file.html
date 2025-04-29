@@ -1,12 +1,29 @@
-{% extends "storage/base.html" %}
+{% extends 'storage/base.html' %}
+
 {% block content %}
-<h2>Share File: {{ file.file_name }}</h2>
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card p-4 shadow-sm">
+            <h3 class="text-center mb-4" style="color:#F57C00;">Share File: {{ file.file_name }}</h3>
 
-<form method="post">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type="submit">Share</button>
-</form>
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="users" class="form-label">Select Users to Share With:</label>
+                    {{ form.users }}
+                </div>
 
-<a href="{% url 'dashboard' %}">Back to Dashboard</a>
+                <div class="mb-3">
+                    <label for="permission" class="form-label">Set Permission:</label>
+                    {{ form.permission }}
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary">Share File</button>
+                    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}

@@ -1,45 +1,56 @@
 {% extends 'storage/base.html' %}
+<style>
+    .hover-shadow:hover {
+        box-shadow: 0 0.75rem 1.5rem rgba(103, 58, 183, 0.5) !important;
+        transition: box-shadow 0.3s ease-in-out;
+    }
+    </style>
+    
+
 {% block content %}
-<h2>Welcome, {{ user.username }}!</h2>
+<div class="row" style="min-height: 80vh;">
+    <!-- Left: Files List -->
+    <div class="col-md-8">
+        <h3 class="mb-4" style="color:#F57C00;">Your Files</h3>
+        <form method="get" class="mb-3 d-flex" style="gap: 10px;">
+            <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Search files by name...">
+            <button type="submit" class="btn btn-outline-primary">Search</button>
+          </form>
 
-<div class="d-flex justify-content-between mb-3">
-  <a href="{% url 'upload_file' %}" class="btn btn-primary">Upload New File</a>
-  <a href="{% url 'logout' %}" class="btn btn-danger">Logout</a>
+        {% if files %}
+            <div class="row">
+                {% for file in files %}
+                    <div class="col-md-6 mb-4">
+                        <div class="card h-100 p-3 shadow-lg hover-shadow">
+                            <h5 class="card-title">{{ file.file_name }}</h5>
+                            <p class="card-text"><strong>Uploaded:</strong> {{ file.uploaded_at|date:"Y-m-d H:i" }}</p>
+
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'verify_action_otp' file.id 'download' %}" class="btn btn-sm btn-outline-primary">Download</a>
+                                <a href="{% url 'verify_action_otp' file.id 'share' %}" class="btn btn-sm btn-outline-success">Share</a>
+                                <a href="{% url 'verify_action_otp' file.id 'delete' %}" class="btn btn-sm btn-outline-danger">Delete</a>
+                                <a href="{% url 'verify_action_otp' file.id 'delete' %}" class="btn btn-sm btn-danger">Move to Trash</a>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-info">You have no files uploaded yet.</div>
+        {% endif %}
+    </div>
+
+    <!-- Right: Actions Panel -->
+    <div class="col-md-4">
+        <div class="card p-4 shadow-sm">
+            <h5 class="text-center mb-3" style="color:#F57C00;">Quick Actions</h5>
+            <div class="d-grid gap-3">
+                <a href="{% url 'upload_file' %}" class="btn btn-primary">Upload New File</a>
+                <a href="{% url 'profile' %}" class="btn btn-outline-secondary">Manage Profile</a>
+                <a href="{% url 'mfa_setup' %}" class="btn btn-outline-warning">Setup MFA</a>
+                <a href="{% url 'profile' %}" class="btn btn-outline-danger">Trash / Restore</a>
+            </div>
+        </div>
+    </div>
 </div>
-
-<h3>Your Files</h3>
-<form method="get" class="mb-3 d-flex" style="gap: 10px;">
-  <input type="text" name="q" value="{{ query }}" class="form-control" placeholder="Search files by name...">
-  <button type="submit" class="btn btn-outline-primary">Search</button>
-</form>
-
-
-{% if files %}
-  <table class="table table-striped">
-    <thead>
-      <tr>
-        <th>File Name</th>
-        <th>Uploaded At</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for file in files %}
-        <tr>
-          <td>{{ file.file_name }}</td>
-          <td>{{ file.uploaded_at|date:"Y-m-d H:i" }}</td>
-          <td>
-            <a href="{% url 'verify_action_otp' file.id 'download' %}" class="btn btn-sm btn-success">Download</a>
-            <a href="{% url 'verify_action_otp' file.id 'delete' %}" class="btn btn-sm btn-danger">Delete</a>
-            <a href="{% url 'verify_action_otp' file.id 'share' %}" class="btn btn-sm btn-success">Share</a>
-            <a href="{% url 'verify_action_otp' file.id 'delete' %}" class="btn btn-sm btn-danger">Move to Trash</a>
-
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-{% else %}
-  <div class="alert alert-info">You haven't uploaded any files yet.</div>
-{% endif %}
 {% endblock %}

@@ -1,9 +1,26 @@
 {% extends 'storage/base.html' %}
+
 {% block content %}
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Login</button>
-  </form>
-    <p>Don't have an account? <a href="{% url 'register' %}">Register here</a></p>  
-    {% endblock %}
+<div class="d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="form-container" style="max-width: 400px; width: 100%;">
+        <h2 class="text-center mb-4" style="color:#F57C00;">Login</h2>
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="username" class="form-label">Email or Username</label>
+                <input type="text" name="username" id="username" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" name="password" id="password" class="form-control" required>
+            </div>
+            <div class="d-grid mb-3">
+                <button type="submit" class="btn btn-primary">Login</button>
+            </div>
+            <p class="text-center">
+                Don't have an account? <a href="{% url 'register' %}" class="text-decoration-none" style="color:#F57C00;">Register</a>
+            </p>
+        </form>
+    </div>
+</div>
+{% endblock %}

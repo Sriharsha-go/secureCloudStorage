@@ -1,14 +1,38 @@
 {% extends 'storage/base.html' %}
+
 {% block content %}
-  <h3>Trash</h3>
-  {% for file in trashed_files %}
-    <li>
-      {{ file.file_name }}
-      <a href="{% url 'restore_file' file.id %}">Restore</a>
-      <a href="{% url 'permanent_delete_file' file.id %}">Delete Permanently</a>
-    </li>
-  {% empty %}
-    <li>Trash is empty.</li>
-  {% endfor %}
-  <a href="{% url 'dashboard' %}">Back to Dashboard</a>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 style="color:#d32f2f;">Trash</h2>
+    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Back to Dashboard</a>
+</div>
+
+<div class="card p-3 shadow-sm">
+    {% if trashed_files %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>File Name</th>
+                    <th>Deleted At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for file in trashed_files %}
+                <tr>
+                    <td>{{ file.file_name }}</td>
+                    <td>{{ file.deleted_at|date:"Y-m-d H:i" }}</td>
+                    <td>
+                        <a href="{% url 'restore_file' file.id %}" class="btn btn-sm btn-success">Restore</a>
+                        <a href="{% url 'permanent_delete_file' file.id %}" class="btn btn-sm btn-danger">Delete Permanently</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="alert alert-info text-center">
+            Trash is empty. Nothing to restore or delete permanently.
+        </div>
+    {% endif %}
+</div>
 {% endblock %}

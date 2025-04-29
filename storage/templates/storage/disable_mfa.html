@@ -2,39 +2,18 @@
 
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-md-6">
-    <div class="card shadow-sm p-4">
-      <h2 class="mb-3 text-danger">Disable MFA</h2>
-      <p class="text-muted">Disabling MFA will reduce account security.</p>
+    <div class="col-md-6">
+        <div class="card p-4 shadow-sm text-center">
+            <h3 class="mb-4" style="color:#F57C00;">Disable MFA</h3>
 
-      <!-- Disable Button triggers Modal -->
-      <button type="button" class="btn btn-danger w-100 mb-2" data-bs-toggle="modal" data-bs-target="#confirmDisableModal">
-        Disable MFA
-      </button>
-      <a href="{% url 'profile' %}" class="btn btn-secondary w-100">Cancel</a>
-    </div>
-  </div>
-</div>
+            <p class="mb-4">Click the button below to disable Multi-Factor Authentication.</p>
 
-<!-- Modal -->
-<div class="modal fade" id="confirmDisableModal" tabindex="-1" aria-labelledby="confirmDisableModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title text-danger" id="confirmDisableModalLabel">Confirm Disable MFA</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        Are you sure you want to disable Multi-Factor Authentication?
-      </div>
-      <div class="modal-footer">
-        <form method="post">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-danger">Yes, Disable</button>
-        </form>
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No, Cancel</button>
-      </div>
+            <form method="post" onsubmit="return confirm('Are you sure you want to disable MFA?');">
+                {% csrf_token %}
+                <button class="btn btn-danger w-100 mb-2">Disable MFA</button>
+                <a href="{% url 'profile' %}" class="btn btn-outline-secondary w-100">Cancel</a>
+            </form>
+        </div>
     </div>
-  </div>
 </div>
 {% endblock %}

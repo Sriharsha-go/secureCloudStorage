@@ -1,11 +1,34 @@
 {% extends 'storage/base.html' %}
+
 {% block content %}
-<h2>Confirm {{ action|title }} Action for: {{ file.file_name }}</h2>
-<form method="post">
-  {% csrf_token %}
-  <label>Enter your 6-digit OTP code:</label>
-  <input type="text" name="token" class="form-control mb-3" required>
-  <button type="submit" class="btn btn-primary">Confirm {{ action|title }}</button>
-  <a href="{% url 'profile' %}" class="btn btn-secondary">Cancel</a>
-</form>
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card p-4 shadow-sm">
+            <h3 class="text-center mb-4" style="color:#F57C00;">Confirm {{ action|title }}</h3>
+
+            <p class="text-center">For file: <strong>{{ file.file_name }}</strong></p>
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="otpInput" class="form-label">Enter your 6-digit OTP code:</label>
+                    <input type="text" name="token" id="otpInput" class="form-control" required>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-success">Verify and Continue</button>
+                    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} mt-3" role="alert">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+</div>
 {% endblock %}
